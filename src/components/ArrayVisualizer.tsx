@@ -12,6 +12,7 @@ import {
 } from "chart.js";
 import gsap from "gsap";
 import type { VisualizerProps } from "../types";
+import dragDataPlugin from "chartjs-plugin-dragdata";
 
 ChartJS.register(
   CategoryScale,
@@ -19,10 +20,11 @@ ChartJS.register(
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  dragDataPlugin
 );
 
-const ArrayVisualizer: React.FC<VisualizerProps> = ({ data }) => {
+const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onBarDragEnd }) => {
   const chartRef = useRef<ChartJS<"bar", number[], string> | null>(null);
 
   let labels: string[];
@@ -66,6 +68,29 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data }) => {
     plugins: {
       legend: { display: false },
       title: { display: true, text: "Array Visualization", color: "white" },
+      dragData: {
+        // ✅ Enable drag plugin
+        round: isCharArray ? 0 : 1, // round char to whole numbers (ASCII), decimals for numbers
+        showTooltip: true,
+        onDragStart: (e: any) => console.log("Drag start", e),
+        onDrag: (
+          e: any,
+          datasetIndex: number,
+          index: number,
+          value: number
+        ) => {
+          // You can hook into this if needed
+        },
+        onDragEnd: (
+          e: any,
+          datasetIndex: number,
+          index: number,
+          value: number
+        ) => {
+          // ✅ This is where you update state & sync to code
+          onBarDragEnd(index, value);
+        },
+      },
     },
     scales: {
       x: {

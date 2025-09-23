@@ -33,6 +33,61 @@ numbers[2] = 85;
 const App: React.FC = () => {
   const [code, setCode] = useState<string>(initialCode);
   const [arrayData, setArrayData] = useState<ArrayData>([]);
+  const [currentArrayName, setCurrentArrayName] = useState<string | null>(null); // Track name
+
+  const handleBarDragEnd = (index: number, newValue: number) => {
+    if (!currentArrayName) return;
+
+    // Update local state
+    const newData = [...arrayData];
+    newData[index] = isCharData(newData)
+      ? String.fromCharCode(newValue)
+      : newValue;
+    setArrayData(newData);
+
+    // Reconstruct code
+    const lines = code.split("\n");
+    const newLines = lines.map((line) => {
+      const trimmed = line.trim();
+
+      // Match assignment line: e.g., numbers[2] = 85;
+      const assignmentRegex = new RegExp(
+        `^${currentArrayName}\\[\\s*${index}\\s*]\\s*=\\s*[^;]+;`
+      );
+      if (assignmentRegex.test(trimmed)) {
+        // Replace existing assignment
+        const valueStr = isCharData(newData)
+          ? `'${newData[index]}'`
+          : newData[index];
+        return `${currentArrayName}[${index}] = ${valueStr};`;
+      }
+
+      // If no assignment exists, append one at the end
+      return line;
+    });
+
+    // Check if we found and replaced — if not, append new assignment
+    const hasAssignment = newLines.some((line) =>
+      new RegExp(`^${currentArrayName}\\[\\s*${index}\\s*]\\s*=`).test(
+        line.trim()
+      )
+    );
+
+    let finalCode = newLines.join("\n");
+    if (!hasAssignment) {
+      const valueStr = isCharData(newData)
+        ? `'${newData[index]}'`
+        : newData[index];
+      finalCode += `\n${currentArrayName}[${index}] = ${valueStr};`;
+    }
+
+    setCode(finalCode);
+  };
+
+  // Helper to detect if data is char array
+  const isCharData = (data: ArrayData): boolean => {
+    return data.length > 0 && typeof data[0] === "string";
+  };
 
   useEffect(() => {
     const lines = code
@@ -115,8 +170,12 @@ const App: React.FC = () => {
       }
     });
 
-    const firstArray = Object.values(arrays)[0] || [];
+    // const firstArray = Object.values(arrays)[0] || [];
+    // setArrayData(firstArray);
+    const firstArrayName = Object.keys(arrays)[0] || null;
+    const firstArray = arrays[firstArrayName] || [];
     setArrayData(firstArray);
+    setCurrentArrayName(firstArrayName);
   }, [code]);
 
   return (
@@ -153,7 +212,7 @@ const App: React.FC = () => {
           minSize={30}
           className="bg-gray-900 p-4 flex items-center justify-center"
         >
-          <ArrayVisualizer data={arrayData} />
+          <ArrayVisualizer data={arrayData} onBarDragEnd={handleBarDragEnd} />
         </Panel>
       </PanelGroup>
 
