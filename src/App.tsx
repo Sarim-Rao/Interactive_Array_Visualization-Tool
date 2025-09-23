@@ -4,9 +4,13 @@ import MonacoEditor from "react-monaco-editor";
 import ArrayVisualizer from "./components/ArrayVisualizer";
 import type { ArrayData } from "./types";
 import "./index.css";
-import { parseCharDeclaration, parseDoubleDeclaration, parseIntDeclaration, parseUpdate } from "./utils";
-
-
+import {
+  parseCharDeclaration,
+  parseDoubleDeclaration,
+  parseIntDeclaration,
+  parseUpdate,
+} from "./utils";
+import { ToastContainer, toast } from "react-toastify";
 
 // --- Main Component ---
 
@@ -45,22 +49,69 @@ const App: React.FC = () => {
       const update = parseUpdate(line);
 
       if (intDecl) {
-        arrays[intDecl.name] = intDecl.values;
+        if (intDecl.size < 0) {
+          toast.error("Negative array sizes are not allowed!");
+        } else if (intDecl.size > 0 && intDecl.values.length > intDecl.size) {
+          toast.error(
+            `Too many initializers for int array '${intDecl.name}'. Declared size: ${intDecl.size}, provided: ${intDecl.values.length}`
+          );
+          arrays[intDecl.name] = intDecl.values.slice(0, intDecl.size); // keep only first N
+        } else {
+          arrays[intDecl.name] =
+            intDecl.size > 0
+              ? [
+                  ...intDecl.values,
+                  ...Array(intDecl.size - intDecl.values.length).fill(0),
+                ]
+              : intDecl.values;
+        }
         return;
       }
+
       if (doubleDecl) {
-        arrays[doubleDecl.name] = doubleDecl.values;
+        if (doubleDecl.size < 0) {
+          toast.error("Negative array sizes are not allowed!");
+        } else {
+          if (doubleDecl.values.length > doubleDecl.size) {
+            toast.error(
+              `Too many initial values for array "${doubleDecl.name}". Expected ${doubleDecl.size}, got ${doubleDecl.values.length}.`
+            );
+            arrays[doubleDecl.name] = doubleDecl.values.slice(
+              0,
+              doubleDecl.size
+            ); // truncate extra
+          } else {
+            arrays[doubleDecl.name] = doubleDecl.values;
+          }
+        }
         return;
       }
+
       if (charDecl) {
-        arrays[charDecl.name] = charDecl.values;
+        if (charDecl.size < 0) {
+          toast.error("Negative array sizes are not allowed!");
+        } else {
+          if (charDecl.values.length > charDecl.size) {
+            toast.error(
+              `Too many initial values for array "${charDecl.name}". Expected ${charDecl.size}, got ${charDecl.values.length}.`
+            );
+            arrays[charDecl.name] = charDecl.values.slice(0, charDecl.size); // truncate
+          } else {
+            arrays[charDecl.name] = charDecl.values;
+          }
+        }
         return;
       }
 
       if (update && arrays[update.name]) {
         const newArr = [...arrays[update.name]];
-        newArr[update.index] = update.value;
-        arrays[update.name] = newArr;
+
+        if (update.index < 0 || update.index >= newArr.length) {
+          toast.error(`Invalid array index: ${update.index}`);
+        } else {
+          newArr[update.index] = update.value;
+          arrays[update.name] = newArr;
+        }
       }
     });
 
@@ -105,6 +156,17 @@ const App: React.FC = () => {
           <ArrayVisualizer data={arrayData} />
         </Panel>
       </PanelGroup>
+
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        pauseOnHover
+        draggable
+        theme="dark"
+      />
     </div>
   );
 };
