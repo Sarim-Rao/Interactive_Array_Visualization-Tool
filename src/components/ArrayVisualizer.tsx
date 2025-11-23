@@ -47,34 +47,105 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data }) => {
         : 100;
   }
 
+  // Create gradient colors for bars
+  const createGradient = (ctx: CanvasRenderingContext2D) => {
+    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+    gradient.addColorStop(0, "rgba(6, 182, 212, 0.8)"); // cyan-500
+    gradient.addColorStop(0.5, "rgba(168, 85, 247, 0.8)"); // purple-500
+    gradient.addColorStop(1, "rgba(236, 72, 153, 0.8)"); // pink-500
+    return gradient;
+  };
+
   const chartData: ChartData<"bar", number[], string> = {
     labels,
     datasets: [
       {
         label: isCharArray ? "ASCII Values" : "Array Values",
         data: chartDataValues,
-        backgroundColor: "rgba(53, 162, 235, 0.5)",
-        borderColor: "rgb(53, 162, 235)",
-        borderWidth: 1,
+        backgroundColor: (context) => {
+          const chart = context.chart;
+          const { ctx, chartArea } = chart;
+          if (!chartArea) return "rgba(6, 182, 212, 0.8)";
+          return createGradient(ctx);
+        },
+        borderColor: (context) => {
+          const index = context.dataIndex;
+          const colors = [
+            "rgba(6, 182, 212, 1)", // cyan
+            "rgba(168, 85, 247, 1)", // purple
+            "rgba(236, 72, 153, 1)", // pink
+          ];
+          return colors[index % colors.length];
+        },
+        borderWidth: 2,
+        borderRadius: 8,
+        borderSkipped: false,
       },
     ],
   };
 
   const options = {
     responsive: true,
-    animation: false, // GSAP handles animation
+    maintainAspectRatio: true,
+    animation: false as const, // GSAP handles animation
     plugins: {
       legend: { display: false },
-      title: { display: true, text: "Array Visualization", color: "white" },
+      title: {
+        display: true,
+        text: "Array Visualization",
+        color: "#fff",
+        font: {
+          size: 20,
+          weight: "bold" as const,
+          family: "'Inter', sans-serif",
+        },
+        padding: {
+          top: 10,
+          bottom: 20,
+        },
+      },
+      tooltip: {
+        backgroundColor: "rgba(0, 0, 0, 0.8)",
+        titleColor: "#fff",
+        bodyColor: "#fff",
+        borderColor: "rgba(6, 182, 212, 0.5)",
+        borderWidth: 1,
+        padding: 12,
+        cornerRadius: 8,
+        displayColors: true,
+        callbacks: {
+          label: function (context: any) {
+            return `${context.dataset.label}: ${context.parsed.y}`;
+          },
+        },
+      },
     },
     scales: {
       x: {
-        grid: { color: "rgba(255, 255, 255, 0.1)" },
-        ticks: { color: "white" },
+        grid: {
+          color: "rgba(255, 255, 255, 0.1)",
+          drawBorder: false,
+        },
+        ticks: {
+          color: "rgba(255, 255, 255, 0.7)",
+          font: {
+            size: 12,
+            weight: "normal" as const,
+          },
+        },
       },
       y: {
-        grid: { color: "rgba(255, 255, 255, 0.1)" },
-        ticks: { color: "white" },
+        grid: {
+          color: "rgba(255, 255, 255, 0.1)",
+          drawBorder: false,
+        },
+        ticks: {
+          color: "rgba(255, 255, 255, 0.7)",
+          font: {
+            size: 12,
+            weight: "normal" as const,
+          },
+        },
         beginAtZero: true as const,
         max: yAxisMax,
       },
@@ -82,20 +153,32 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data }) => {
   };
 
   useEffect(() => {
-    const chartInstance = chartRef.current?.chartInstance;
-    if (chartInstance) {
-      const bars = chartInstance.getDatasetMeta(0).data;
-      gsap.fromTo(
-        bars,
-        { scaleY: 0.1, duration: 0.5 },
-        { scaleY: 1, duration: 0.5, stagger: 0.05, ease: "power2.out" }
-      );
-    }
+    // Use setTimeout to ensure chart is rendered
+    const timer = setTimeout(() => {
+      const chartInstance = chartRef.current;
+      if (chartInstance) {
+        try {
+          const bars = chartInstance.getDatasetMeta(0).data;
+          gsap.fromTo(
+            bars,
+            { scaleY: 0.1, duration: 0.5 },
+            { scaleY: 1, duration: 0.5, stagger: 0.05, ease: "power2.out" }
+          );
+        } catch (error) {
+          // Chart might not be ready yet
+          console.debug("Chart animation skipped:", error);
+        }
+      }
+    }, 100);
+    return () => clearTimeout(timer);
   }, [data]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto h-full p-4 flex items-center justify-center">
-      <Bar ref={chartRef} data={chartData} options={options} />
+    <div className="w-full max-w-5xl mx-auto h-full p-6 flex items-center justify-center relative">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-purple-500/10 to-pink-500/10 rounded-3xl blur-3xl"></div>
+      <div className="relative z-10 w-full h-full bg-black/20 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-6">
+        <Bar ref={chartRef} data={chartData} options={options} />
+      </div>
     </div>
   );
 };

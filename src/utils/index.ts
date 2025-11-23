@@ -73,3 +73,15 @@ export const parseUpdate = (
 
   return null;
 };
+
+// Helper function to detect if a line looks like an update statement but is missing a semicolon
+export const detectMissingSemicolon = (line: string): boolean => {
+  // Check if line matches update pattern but without semicolon at the end
+  const updatePatterns = [
+    /^\s*\w+\[\d+\]\s*=\s*\d+\s*$/, // int update without semicolon
+    /^\s*\w+\[\d+\]\s*=\s*[\d.]+\s*$/, // double update without semicolon
+    /^\s*\w+\[\d+\]\s*=\s*'.'\s*$/, // char update without semicolon
+  ];
+
+  return updatePatterns.some((pattern) => pattern.test(line));
+};
