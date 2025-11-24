@@ -37,6 +37,8 @@ const App: React.FC = () => {
   const [code, setCode] = useState<string>(initialCode);
   const [arrayData, setArrayData] = useState<ArrayData>([]);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
+  const [currentArrayName, setCurrentArrayName] = useState<string>("");
+  const [currentArrayType, setCurrentArrayType] = useState<"int" | "double" | "char" | null>(null);
 
   useEffect(() => {
     const lines = code
@@ -45,6 +47,7 @@ const App: React.FC = () => {
       .filter((line) => line.length > 0 && !line.startsWith("//"));
 
     const arrays: Record<string, ArrayData> = {};
+    const arrayTypes: Record<string, "int" | "double" | "char"> = {};
 
     lines.forEach((line) => {
       const intDecl = parseIntDeclaration(line);
@@ -62,6 +65,7 @@ const App: React.FC = () => {
       }
 
       if (intDecl) {
+        arrayTypes[intDecl.name] = "int";
         if (intDecl.size < 0) {
           toast.error("Negative array sizes are not allowed!");
         } else if (intDecl.size > 0) {
@@ -87,6 +91,7 @@ const App: React.FC = () => {
       }
 
       if (doubleDecl) {
+        arrayTypes[doubleDecl.name] = "double";
         if (doubleDecl.size < 0) {
           toast.error("Negative array sizes are not allowed!");
         } else if (doubleDecl.size > 0) {
@@ -115,6 +120,7 @@ const App: React.FC = () => {
       }
 
       if (charDecl) {
+        arrayTypes[charDecl.name] = "char";
         if (charDecl.size < 0) {
           toast.error("Negative array sizes are not allowed!");
         } else if (charDecl.size > 0) {
@@ -151,9 +157,68 @@ const App: React.FC = () => {
       }
     });
 
+    const firstArrayName = Object.keys(arrays)[0] || "";
     const firstArray = Object.values(arrays)[0] || [];
     setArrayData(firstArray);
+    
+    // Track the current array name and type
+    if (firstArrayName) {
+      setCurrentArrayName(firstArrayName);
+      setCurrentArrayType(arrayTypes[firstArrayName] || null);
+    } else {
+      setCurrentArrayName("");
+      setCurrentArrayType(null);
+    }
   }, [code]);
+
+  // Handle bar drag updates - update code in real-time
+  const handleDataChange = (index: number, value: number | string) => {
+    if (!currentArrayName || !currentArrayType) return;
+
+    const lines = code.split("\n");
+    let updateLineIndex = -1;
+    
+    // Find existing update statement for this index
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      const update = parseUpdate(line);
+      if (update && update.name === currentArrayName && update.index === index) {
+        updateLineIndex = i;
+        break;
+      }
+    }
+
+    // Format the value based on type
+    let formattedValue: string;
+    if (currentArrayType === "char") {
+      formattedValue = `'${value}'`;
+    } else if (currentArrayType === "double") {
+      formattedValue = typeof value === "number" ? value.toString() : parseFloat(value.toString()).toString();
+    } else {
+      formattedValue = typeof value === "number" ? Math.round(value).toString() : Math.round(parseFloat(value.toString())).toString();
+    }
+
+    const newUpdateStatement = `${currentArrayName}[${index}] = ${formattedValue};`;
+
+    if (updateLineIndex >= 0) {
+      // Update existing line
+      lines[updateLineIndex] = newUpdateStatement;
+    } else {
+      // Add new update statement at the end (before any trailing comments)
+      let insertIndex = lines.length;
+      // Find the last non-empty, non-comment line
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const trimmed = lines[i].trim();
+        if (trimmed && !trimmed.startsWith("//")) {
+          insertIndex = i + 1;
+          break;
+        }
+      }
+      lines.splice(insertIndex, 0, newUpdateStatement);
+    }
+
+    setCode(lines.join("\n"));
+  };
 
   return (
     <div className="h-[100vh] flex flex-col relative overflow-hidden">
@@ -212,7 +277,7 @@ const App: React.FC = () => {
         >
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-purple-500/5 to-pink-500/5"></div>
           <div className="relative z-10 w-full h-full">
-            <ArrayVisualizer data={arrayData} />
+            <ArrayVisualizer data={arrayData} onDataChange={handleDataChange} />
           </div>
         </Panel>
       </PanelGroup>

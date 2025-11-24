@@ -4,6 +4,7 @@ export type ArrayData = (string | number)[];
 
 export interface VisualizerProps {
   data: ArrayData;
+  onDataChange?: (index: number, value: number | string) => void;
 }
 
 export interface AppState {

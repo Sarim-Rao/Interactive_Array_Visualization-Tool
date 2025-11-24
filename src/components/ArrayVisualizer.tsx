@@ -1,5 +1,7 @@
 import React, { useRef, useEffect } from "react";
 import { Bar } from "react-chartjs-2";
+import dragData from "chartjs-plugin-dragdata";
+
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -19,10 +21,11 @@ ChartJS.register(
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  dragData
 );
 
-const ArrayVisualizer: React.FC<VisualizerProps> = ({ data }) => {
+const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange }) => {
   const chartRef = useRef<ChartJS<"bar", number[], string> | null>(null);
 
   let labels: string[];
@@ -89,6 +92,30 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data }) => {
     maintainAspectRatio: true,
     animation: false as const, // GSAP handles animation
     plugins: {
+      dragData: {
+        round: 0,
+        showTooltip: true,
+        onDragStart: () => {
+          document.body.style.cursor = "grabbing";
+        },
+        onDrag: (_e: any, _datasetIndex: number, index: number, value: number | [number, number] | null) => {
+          if (value === null || Array.isArray(value)) return;
+          chartDataValues[index] = value;
+          // Convert back to original type if it's a char array
+          if (isCharArray && onDataChange) {
+            const charValue = String.fromCharCode(value);
+            onDataChange(index, charValue);
+          } else if (onDataChange) {
+            onDataChange(index, value);
+          }
+        },
+        onDragEnd: (_e: any, _datasetIndex: number, index: number, value: number | [number, number] | null) => {
+          document.body.style.cursor = "default";
+          if (value !== null && !Array.isArray(value)) {
+            console.log(`Bar ${index} updated to ${value}`);
+          }
+        }
+      },
       legend: { display: false },
       title: {
         display: true,
