@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vercel/analytics": "^1.6.1",
     "chart.js": "^4.5.0",
     "chartjs-plugin-dragdata": "^2.3.1",
     "gsap": "^3.13.0",

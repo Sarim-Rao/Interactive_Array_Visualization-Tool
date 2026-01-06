@@ -15,6 +15,7 @@ import {
 } from "./utils";
 import { ToastContainer, toast } from "react-toastify";
 import { useDebouncedCallback } from "use-debounce";
+import { Analytics } from "@vercel/analytics/react";
 
 // --- Main Component ---
 
@@ -375,6 +376,7 @@ const App: React.FC = () => {
         isOpen={isInfoModalOpen}
         onClose={() => setIsInfoModalOpen(false)}
       />
+      <Analytics />
     </div>
   );
 };
