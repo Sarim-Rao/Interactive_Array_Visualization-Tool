@@ -14,6 +14,7 @@ import {
   detectMissingSemicolon,
 } from "./utils";
 import { ToastContainer, toast } from "react-toastify";
+import { useDebouncedCallback } from "use-debounce";
 
 // --- Main Component ---
 
@@ -40,8 +41,9 @@ const App: React.FC = () => {
   const [currentArrayName, setCurrentArrayName] = useState<string>("");
   const [currentArrayType, setCurrentArrayType] = useState<"int" | "double" | "char" | null>(null);
 
-  useEffect(() => {
-    const lines = code
+  // Debounced validation function to prevent excessive toast notifications
+  const debouncedValidation = useDebouncedCallback((codeToValidate: string) => {
+    const lines = codeToValidate
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line.length > 0 && !line.startsWith("//"));
@@ -169,7 +171,82 @@ const App: React.FC = () => {
       setCurrentArrayName("");
       setCurrentArrayType(null);
     }
-  }, [code]);
+  }, 500); // 500ms delay
+
+  // Immediate effect for updating array data without validation toasts
+  useEffect(() => {
+    const lines = code
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("//"));
+
+    const arrays: Record<string, ArrayData> = {};
+    const arrayTypes: Record<string, "int" | "double" | "char"> = {};
+
+    lines.forEach((line) => {
+      const intDecl = parseIntDeclaration(line);
+      const doubleDecl = parseDoubleDeclaration(line);
+      const charDecl = parseCharDeclaration(line);
+      const update = parseUpdate(line);
+
+      // Process declarations without validation toasts
+      if (intDecl) {
+        arrayTypes[intDecl.name] = "int";
+        if (intDecl.size > 0) {
+          if (intDecl.values.length >= intDecl.size) {
+            arrays[intDecl.name] = intDecl.values.slice(0, intDecl.size);
+          } else {
+            arrays[intDecl.name] = intDecl.values;
+          }
+        } else {
+          arrays[intDecl.name] = intDecl.values;
+        }
+      } else if (doubleDecl) {
+        arrayTypes[doubleDecl.name] = "double";
+        if (doubleDecl.size > 0) {
+          if (doubleDecl.values.length >= doubleDecl.size) {
+            arrays[doubleDecl.name] = doubleDecl.values.slice(0, doubleDecl.size);
+          } else {
+            arrays[doubleDecl.name] = doubleDecl.values;
+          }
+        } else {
+          arrays[doubleDecl.name] = doubleDecl.values;
+        }
+      } else if (charDecl) {
+        arrayTypes[charDecl.name] = "char";
+        if (charDecl.size > 0) {
+          if (charDecl.values.length >= charDecl.size) {
+            arrays[charDecl.name] = charDecl.values.slice(0, charDecl.size);
+          } else {
+            arrays[charDecl.name] = charDecl.values;
+          }
+        } else {
+          arrays[charDecl.name] = charDecl.values;
+        }
+      } else if (update && arrays[update.name]) {
+        const newArr = [...arrays[update.name]];
+        if (update.index >= 0 && update.index < newArr.length) {
+          newArr[update.index] = update.value;
+          arrays[update.name] = newArr;
+        }
+      }
+    });
+
+    const firstArrayName = Object.keys(arrays)[0] || "";
+    const firstArray = Object.values(arrays)[0] || [];
+    setArrayData(firstArray);
+    
+    // Track the current array name and type
+    if (firstArrayName) {
+      setCurrentArrayName(firstArrayName);
+      setCurrentArrayType(arrayTypes[firstArrayName] || null);
+    } else {
+      setCurrentArrayName("");
+      setCurrentArrayType(null);
+    }
+    // Trigger debounced validation for error checking
+    debouncedValidation(code);
+  }, [code, debouncedValidation]);
 
   // Handle bar drag updates - update code in real-time
   const handleDataChange = (index: number, value: number | string) => {

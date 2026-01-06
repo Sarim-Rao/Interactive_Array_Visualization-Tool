@@ -19,7 +19,8 @@
     "react-dom": "^19.1.1",
     "react-monaco-editor": "^0.59.0",
     "react-resizable-panels": "^3.0.5",
-    "react-toastify": "^11.0.5"
+    "react-toastify": "^11.0.5",
+    "use-debounce": "^10.0.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
@@ -30,6 +31,7 @@
     "@types/react-monaco-editor": "^0.16.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
+    "baseline-browser-mapping": "^2.9.11",
     "eslint": "^9.33.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
