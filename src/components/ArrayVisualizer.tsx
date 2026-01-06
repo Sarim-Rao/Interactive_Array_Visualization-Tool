@@ -53,9 +53,9 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange }) => {
   // Create gradient colors for bars
   const createGradient = (ctx: CanvasRenderingContext2D) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-    gradient.addColorStop(0, "rgba(6, 182, 212, 0.8)"); // cyan-500
-    gradient.addColorStop(0.5, "rgba(168, 85, 247, 0.8)"); // purple-500
-    gradient.addColorStop(1, "rgba(236, 72, 153, 0.8)"); // pink-500
+    gradient.addColorStop(0, "rgba(6, 182, 212, 0.8)"); 
+    gradient.addColorStop(0.5, "rgba(168, 85, 247, 0.8)"); 
+    gradient.addColorStop(1, "rgba(236, 72, 153, 0.8)"); 
     return gradient;
   };
 
@@ -74,9 +74,9 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange }) => {
         borderColor: (context) => {
           const index = context.dataIndex;
           const colors = [
-            "rgba(6, 182, 212, 1)", // cyan
-            "rgba(168, 85, 247, 1)", // purple
-            "rgba(236, 72, 153, 1)", // pink
+            "rgba(6, 182, 212, 1)", 
+            "rgba(168, 85, 247, 1)", 
+            "rgba(236, 72, 153, 1)", 
           ];
           return colors[index % colors.length];
         },
@@ -101,7 +101,6 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange }) => {
         onDrag: (_e: any, _datasetIndex: number, index: number, value: number | [number, number] | null) => {
           if (value === null || Array.isArray(value)) return;
           chartDataValues[index] = value;
-          // Convert back to original type if it's a char array
           if (isCharArray && onDataChange) {
             const charValue = String.fromCharCode(value);
             onDataChange(index, charValue);
@@ -192,7 +191,6 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange }) => {
             { scaleY: 1, duration: 0.5, stagger: 0.05, ease: "power2.out" }
           );
         } catch (error) {
-          // Chart might not be ready yet
           console.debug("Chart animation skipped:", error);
         }
       }
