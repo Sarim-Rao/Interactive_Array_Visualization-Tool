@@ -42,7 +42,6 @@ const App: React.FC = () => {
   const [currentArrayName, setCurrentArrayName] = useState<string>("");
   const [currentArrayType, setCurrentArrayType] = useState<"int" | "double" | "char" | null>(null);
 
-  // Debounced validation function to prevent excessive toast notifications
   const debouncedValidation = useDebouncedCallback((codeToValidate: string) => {
     const lines = codeToValidate
       .split("\n")
@@ -64,7 +63,7 @@ const App: React.FC = () => {
           "⚠️ Missing semicolon! Add a semicolon (;) at the end of your statement. Example: values[1] = 9;",
           { autoClose: 4000 }
         );
-        return; // Skip processing this line
+        return; 
       }
 
       if (intDecl) {
@@ -81,10 +80,8 @@ const App: React.FC = () => {
             toast.error(
               `Too few initializers for int array '${intDecl.name}'. Declared size: ${intDecl.size}, provided: ${intDecl.values.length}. Please provide exactly ${intDecl.size} values.`
             );
-            // Don't create the array if size doesn't match
             return;
           } else {
-            // Exact match
             arrays[intDecl.name] = intDecl.values;
           }
         } else {
@@ -105,15 +102,13 @@ const App: React.FC = () => {
             arrays[doubleDecl.name] = doubleDecl.values.slice(
               0,
               doubleDecl.size
-            ); // truncate extra
+            ); 
           } else if (doubleDecl.values.length < doubleDecl.size) {
             toast.error(
               `Too few initial values for array "${doubleDecl.name}". Declared size: ${doubleDecl.size}, provided: ${doubleDecl.values.length}. Please provide exactly ${doubleDecl.size} values.`
             );
-            // Don't create the array if size doesn't match
             return;
           } else {
-            // Exact match
             arrays[doubleDecl.name] = doubleDecl.values;
           }
         } else {
@@ -131,15 +126,13 @@ const App: React.FC = () => {
             toast.error(
               `Too many initial values for array "${charDecl.name}". Expected ${charDecl.size}, got ${charDecl.values.length}.`
             );
-            arrays[charDecl.name] = charDecl.values.slice(0, charDecl.size); // truncate
+            arrays[charDecl.name] = charDecl.values.slice(0, charDecl.size);
           } else if (charDecl.values.length < charDecl.size) {
             toast.error(
               `Too few initial values for array "${charDecl.name}". Declared size: ${charDecl.size}, provided: ${charDecl.values.length}. Please provide exactly ${charDecl.size} values.`
             );
-            // Don't create the array if size doesn't match
             return;
           } else {
-            // Exact match
             arrays[charDecl.name] = charDecl.values;
           }
         } else {
@@ -172,7 +165,7 @@ const App: React.FC = () => {
       setCurrentArrayName("");
       setCurrentArrayType(null);
     }
-  }, 500); // 500ms delay
+  }, 500);
 
   // Immediate effect for updating array data without validation toasts
   useEffect(() => {
@@ -245,7 +238,7 @@ const App: React.FC = () => {
       setCurrentArrayName("");
       setCurrentArrayType(null);
     }
-    // Trigger debounced validation for error checking
+
     debouncedValidation(code);
   }, [code, debouncedValidation]);
 
