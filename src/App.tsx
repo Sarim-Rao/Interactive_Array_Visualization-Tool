@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
 import MonacoEditor from "react-monaco-editor";
 import ArrayVisualizer from "./components/ArrayVisualizer";
+import ExecutionControls from "./components/ExecutionControls";
 import InfoModal from "./components/InfoModal";
 import { Info } from "lucide-react";
-import type { ArrayData } from "./types";
+import type { ArrayData, ExecutionState, ExecutionMode } from "./types";
 import "./index.css";
 import {
   parseCharDeclaration,
   parseDoubleDeclaration,
   parseIntDeclaration,
   parseUpdate,
+  parseInsert,
+  parseDelete,
   detectMissingSemicolon,
 } from "./utils";
 import { ToastContainer, toast } from "react-toastify";
@@ -19,20 +22,7 @@ import { Analytics } from "@vercel/analytics/react";
 
 // --- Main Component ---
 
-const initialCode = `// C++ Array Visualization Prototype
-// Supports int, char, and double arrays.
-
-// Example: Integer Array
-int numbers[5] = {10, 20, 30, 40, 50}; 
-numbers[2] = 85; 
-
-// Example: Character Array
-// char word[4] = "byte";
-// word[0] = 'j';
-
-// Example: Double Array
-// double values[3] = {1.5, 2.7, 3.14};
-// values[1] = 4.2;
+const initialCode = `
 `;
 
 const App: React.FC = () => {
@@ -41,6 +31,14 @@ const App: React.FC = () => {
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
   const [currentArrayName, setCurrentArrayName] = useState<string>("");
   const [currentArrayType, setCurrentArrayType] = useState<"int" | "double" | "char" | null>(null);
+  const [executionState, setExecutionState] = useState<ExecutionState>({
+    mode: "live",
+    currentLine: 0,
+    executedLines: [],
+    isPlaying: false,
+    arrayHistory: [[]],
+  });
+  const playIntervalRef = useRef<number | null>(null);
 
   const debouncedValidation = useDebouncedCallback((codeToValidate: string) => {
     const lines = codeToValidate
@@ -56,9 +54,11 @@ const App: React.FC = () => {
       const doubleDecl = parseDoubleDeclaration(line);
       const charDecl = parseCharDeclaration(line);
       const update = parseUpdate(line);
+      const insert = parseInsert(line);
+      const deleteOp = parseDelete(line);
 
       // Check for missing semicolon in update statements
-      if (!intDecl && !doubleDecl && !charDecl && !update && detectMissingSemicolon(line)) {
+      if (!intDecl && !doubleDecl && !charDecl && !update && !insert && !deleteOp && detectMissingSemicolon(line)) {
         toast.warning(
           "⚠️ Missing semicolon! Add a semicolon (;) at the end of your statement. Example: values[1] = 9;",
           { autoClose: 4000 }
@@ -151,6 +151,30 @@ const App: React.FC = () => {
           arrays[update.name] = newArr;
         }
       }
+
+      // Handle insert operations
+      if (insert && arrays[insert.name]) {
+        const newArr = [...arrays[insert.name]];
+        
+        if (insert.index < 0 || insert.index > newArr.length) {
+          toast.error(`Invalid insert index: ${insert.index}`);
+        } else {
+          newArr.splice(insert.index, 0, insert.value);
+          arrays[insert.name] = newArr;
+        }
+      }
+
+      // Handle delete operations
+      if (deleteOp && arrays[deleteOp.name]) {
+        const newArr = [...arrays[deleteOp.name]];
+        
+        if (deleteOp.index < 0 || deleteOp.index >= newArr.length) {
+          toast.error(`Invalid delete index: ${deleteOp.index}`);
+        } else {
+          newArr.splice(deleteOp.index, 1);
+          arrays[deleteOp.name] = newArr;
+        }
+      }
     });
 
     const firstArrayName = Object.keys(arrays)[0] || "";
@@ -182,6 +206,8 @@ const App: React.FC = () => {
       const doubleDecl = parseDoubleDeclaration(line);
       const charDecl = parseCharDeclaration(line);
       const update = parseUpdate(line);
+      const insert = parseInsert(line);
+      const deleteOp = parseDelete(line);
 
       // Process declarations without validation toasts
       if (intDecl) {
@@ -222,6 +248,18 @@ const App: React.FC = () => {
         if (update.index >= 0 && update.index < newArr.length) {
           newArr[update.index] = update.value;
           arrays[update.name] = newArr;
+        }
+      } else if (insert && arrays[insert.name]) {
+        const newArr = [...arrays[insert.name]];
+        if (insert.index >= 0 && insert.index <= newArr.length) {
+          newArr.splice(insert.index, 0, insert.value);
+          arrays[insert.name] = newArr;
+        }
+      } else if (deleteOp && arrays[deleteOp.name]) {
+        const newArr = [...arrays[deleteOp.name]];
+        if (deleteOp.index >= 0 && deleteOp.index < newArr.length) {
+          newArr.splice(deleteOp.index, 1);
+          arrays[deleteOp.name] = newArr;
         }
       }
     });
@@ -291,6 +329,161 @@ const App: React.FC = () => {
     setCode(lines.join("\n"));
   };
 
+  // Execution control functions
+  const getExecutableLines = () => {
+    return code
+      .split("\n")
+      .map((line, index) => ({ line: line.trim(), index }))
+      .filter(({ line }) => line.length > 0 && !line.startsWith("//"));
+  };
+
+  const executeLine = (lineIndex: number) => {
+    const lines = getExecutableLines();
+    if (lineIndex < 0 || lineIndex >= lines.length) return;
+
+    const arrays: Record<string, ArrayData> = {};
+    const arrayTypes: Record<string, "int" | "double" | "char"> = {};
+
+    // Execute all previous lines to get current state
+    for (let i = 0; i <= lineIndex; i++) {
+      const { line: currentLine } = lines[i];
+      const intDecl = parseIntDeclaration(currentLine);
+      const doubleDecl = parseDoubleDeclaration(currentLine);
+      const charDecl = parseCharDeclaration(currentLine);
+      const update = parseUpdate(currentLine);
+      const insert = parseInsert(currentLine);
+      const deleteOp = parseDelete(currentLine);
+
+      if (intDecl) {
+        arrayTypes[intDecl.name] = "int";
+        arrays[intDecl.name] = intDecl.values.slice(0, intDecl.size || intDecl.values.length);
+      } else if (doubleDecl) {
+        arrayTypes[doubleDecl.name] = "double";
+        arrays[doubleDecl.name] = doubleDecl.values.slice(0, doubleDecl.size || doubleDecl.values.length);
+      } else if (charDecl) {
+        arrayTypes[charDecl.name] = "char";
+        arrays[charDecl.name] = charDecl.values.slice(0, charDecl.size || charDecl.values.length);
+      } else if (update && arrays[update.name]) {
+        const newArr = [...arrays[update.name]];
+        if (update.index >= 0 && update.index < newArr.length) {
+          newArr[update.index] = update.value;
+          arrays[update.name] = newArr;
+        }
+      } else if (insert && arrays[insert.name]) {
+        const newArr = [...arrays[insert.name]];
+        if (insert.index >= 0 && insert.index <= newArr.length) {
+          newArr.splice(insert.index, 0, insert.value);
+          arrays[insert.name] = newArr;
+        }
+      } else if (deleteOp && arrays[deleteOp.name]) {
+        const newArr = [...arrays[deleteOp.name]];
+        if (deleteOp.index >= 0 && deleteOp.index < newArr.length) {
+          newArr.splice(deleteOp.index, 1);
+          arrays[deleteOp.name] = newArr;
+        }
+      }
+    }
+
+    const firstArrayName = Object.keys(arrays)[0] || "";
+    const firstArray = Object.values(arrays)[0] || [];
+    setArrayData(firstArray);
+    
+    if (firstArrayName) {
+      setCurrentArrayName(firstArrayName);
+      setCurrentArrayType(arrayTypes[firstArrayName] || null);
+    }
+  };
+
+  const handleModeChange = (mode: ExecutionMode) => {
+    setExecutionState(prev => ({
+      ...prev,
+      mode,
+      currentLine: 0,
+      executedLines: [],
+      isPlaying: false,
+      arrayHistory: [[]],
+    }));
+    
+    if (playIntervalRef.current) {
+      clearInterval(playIntervalRef.current);
+      playIntervalRef.current = null;
+    }
+  };
+
+  const handleStepForward = () => {
+    const lines = getExecutableLines();
+    if (executionState.currentLine < lines.length) {
+      const newLine = executionState.currentLine + 1;
+      executeLine(newLine - 1);
+      
+      setExecutionState(prev => ({
+        ...prev,
+        currentLine: newLine,
+        executedLines: [...prev.executedLines, newLine - 1],
+        arrayHistory: [...prev.arrayHistory, arrayData],
+      }));
+    }
+  };
+
+  const handleStepBack = () => {
+    if (executionState.currentLine > 0) {
+      const newLine = executionState.currentLine - 1;
+      executeLine(newLine - 1);
+      
+      setExecutionState(prev => ({
+        ...prev,
+        currentLine: newLine,
+        executedLines: prev.executedLines.slice(0, -1),
+        arrayHistory: prev.arrayHistory.slice(0, -1),
+      }));
+    }
+  };
+
+  const handleReset = () => {
+    setExecutionState(prev => ({
+      ...prev,
+      currentLine: 0,
+      executedLines: [],
+      isPlaying: false,
+      arrayHistory: [[]],
+    }));
+    setArrayData([]);
+    setCurrentArrayName("");
+    setCurrentArrayType(null);
+    
+    if (playIntervalRef.current) {
+      clearInterval(playIntervalRef.current);
+      playIntervalRef.current = null;
+    }
+  };
+
+  const handlePlay = () => {
+    if (executionState.isPlaying) {
+      // Pause
+      if (playIntervalRef.current) {
+        clearInterval(playIntervalRef.current);
+        playIntervalRef.current = null;
+      }
+      setExecutionState(prev => ({ ...prev, isPlaying: false }));
+    } else {
+      // Play
+      setExecutionState(prev => ({ ...prev, isPlaying: true }));
+      playIntervalRef.current = window.setInterval(() => {
+        setExecutionState(prev => {
+          const lines = getExecutableLines();
+          if (prev.currentLine >= lines.length) {
+            if (playIntervalRef.current) {
+              clearInterval(playIntervalRef.current);
+              playIntervalRef.current = null;
+            }
+            return { ...prev, isPlaying: false };
+          }
+          return prev;
+        });
+      }, 1000);
+    }
+  };
+
   return (
     <div className="h-[100vh] flex flex-col relative overflow-hidden">
       {/* Animated gradient background */}
@@ -311,6 +504,24 @@ const App: React.FC = () => {
           <Info size={24} />
         </button>
       </header>
+      
+      {/* Execution Controls */}
+      <div className="relative z-10 px-4 py-3">
+        <ExecutionControls
+          mode={executionState.mode}
+          onModeChange={handleModeChange}
+          currentLine={executionState.currentLine}
+          totalLines={getExecutableLines().length}
+          onStepForward={handleStepForward}
+          onStepBack={handleStepBack}
+          onReset={handleReset}
+          onPlay={handlePlay}
+          isPlaying={executionState.isPlaying}
+          canStepForward={executionState.currentLine < getExecutableLines().length}
+          canStepBack={executionState.currentLine > 0}
+        />
+      </div>
+      
       <PanelGroup direction="horizontal" className="flex-1 relative z-0">
         <Panel defaultSize={50} minSize={30}>
           <div className="h-full bg-black/20 backdrop-blur-sm border-r border-white/10 shadow-2xl">
@@ -332,6 +543,8 @@ const App: React.FC = () => {
                 },
                 overviewRulerLanes: 0,
                 lineNumbersMinChars: 3,
+                glyphMargin: true,
+                lineDecorationsWidth: 5,
               }}
             />
           </div>

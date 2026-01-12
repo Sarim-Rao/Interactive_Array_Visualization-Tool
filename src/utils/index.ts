@@ -74,6 +74,59 @@ export const parseUpdate = (
   return null;
 };
 
+export const parseInsert = (
+  line: string
+): { name: string; index: number; value: number | string } | null => {
+  // Parse insert operations like: array.insert(2, 50); or array.insert(2, 'a');
+  let match = line.match(/(\w+)\.insert\((-?\d+),\s*(\d+)\);/);
+  if (match) {
+    return {
+      name: match[1],
+      index: parseInt(match[2], 10),
+      value: parseInt(match[3], 10),
+    };
+  }
+
+  match = line.match(/(\w+)\.insert\((-?\d+),\s*([\d.]+)\);/);
+  if (match) {
+    return {
+      name: match[1],
+      index: parseInt(match[2], 10),
+      value: parseFloat(match[3]),
+    };
+  }
+
+  match = line.match(/(\w+)\.insert\((-?\d+),\s*'(.)'\);/);
+  if (match) {
+    return { name: match[1], index: parseInt(match[2], 10), value: match[3] };
+  }
+
+  return null;
+};
+
+export const parseDelete = (
+  line: string
+): { name: string; index: number } | null => {
+  // Parse delete operations like: array.remove(2); or array.delete(2);
+  let match = line.match(/(\w+)\.remove\((-?\d+)\);/);
+  if (match) {
+    return {
+      name: match[1],
+      index: parseInt(match[2], 10),
+    };
+  }
+
+  match = line.match(/(\w+)\.delete\((-?\d+)\);/);
+  if (match) {
+    return {
+      name: match[1],
+      index: parseInt(match[2], 10),
+    };
+  }
+
+  return null;
+};
+
 // Helper function to detect if a line looks like an update statement but is missing a semicolon
 export const detectMissingSemicolon = (line: string): boolean => {
   // Check if line matches update pattern but without semicolon at the end
