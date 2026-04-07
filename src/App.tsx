@@ -3,9 +3,10 @@ import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
 import MonacoEditor from "react-monaco-editor";
 import ArrayVisualizer from "./components/ArrayVisualizer";
 import ExecutionControls from "./components/ExecutionControls";
+import AlgorithmControls from "./components/AlgorithmControls";
 import InfoModal from "./components/InfoModal";
 import { Info } from "lucide-react";
-import type { ArrayData, ExecutionState, ExecutionMode } from "./types";
+import type { ArrayData, ExecutionState, ExecutionMode, AlgorithmType } from "./types";
 import "./index.css";
 import {
   parseCharDeclaration,
@@ -16,13 +17,30 @@ import {
   parseDelete,
   detectMissingSemicolon,
 } from "./utils";
+import { 
+  initializeAlgorithmState, 
+  getNextAlgorithmStep, 
+  getPreviousAlgorithmStep,
+  resetAlgorithmState,
+  algorithmCodeSnippets 
+} from "./utils/algorithms";
 import { ToastContainer, toast } from "react-toastify";
 import { useDebouncedCallback } from "use-debounce";
 import { Analytics } from "@vercel/analytics/react";
 
 // --- Main Component ---
 
-const initialCode = `
+const initialCode = `// Array declaration and operations example
+int numbers[5] = {10, 20, 30, 40, 50};
+
+// Update element at index 2
+numbers[2] = 35;
+
+// Insert new element at index 1
+numbers.insert(1, 25);
+
+// Delete element at index 3
+numbers.remove(3);
 `;
 
 const App: React.FC = () => {
@@ -37,8 +55,11 @@ const App: React.FC = () => {
     executedLines: [],
     isPlaying: false,
     arrayHistory: [[]],
+    algorithmState: undefined,
   });
+  const [algorithmCode, setAlgorithmCode] = useState<string>("");
   const playIntervalRef = useRef<number | null>(null);
+  const algorithmIntervalRef = useRef<number | null>(null);
 
   const debouncedValidation = useDebouncedCallback((codeToValidate: string) => {
     const lines = codeToValidate
@@ -395,6 +416,16 @@ const App: React.FC = () => {
   };
 
   const handleModeChange = (mode: ExecutionMode) => {
+    // Stop any running intervals
+    if (playIntervalRef.current) {
+      clearInterval(playIntervalRef.current);
+      playIntervalRef.current = null;
+    }
+    if (algorithmIntervalRef.current) {
+      clearInterval(algorithmIntervalRef.current);
+      algorithmIntervalRef.current = null;
+    }
+    
     setExecutionState(prev => ({
       ...prev,
       mode,
@@ -402,11 +433,12 @@ const App: React.FC = () => {
       executedLines: [],
       isPlaying: false,
       arrayHistory: [[]],
+      algorithmState: mode === "algorithm" ? prev.algorithmState : undefined,
     }));
     
-    if (playIntervalRef.current) {
-      clearInterval(playIntervalRef.current);
-      playIntervalRef.current = null;
+    // Clear algorithm code if switching away from algorithm mode
+    if (mode !== "algorithm") {
+      setAlgorithmCode("");
     }
   };
 
@@ -440,21 +472,43 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-    setExecutionState(prev => ({
-      ...prev,
-      currentLine: 0,
-      executedLines: [],
-      isPlaying: false,
-      arrayHistory: [[]],
-    }));
-    setArrayData([]);
-    setCurrentArrayName("");
-    setCurrentArrayType(null);
-    
+    // Stop any running intervals
     if (playIntervalRef.current) {
       clearInterval(playIntervalRef.current);
       playIntervalRef.current = null;
     }
+    if (algorithmIntervalRef.current) {
+      clearInterval(algorithmIntervalRef.current);
+      algorithmIntervalRef.current = null;
+    }
+    
+    if (executionState.mode === "algorithm" && executionState.algorithmState) {
+      // Reset algorithm state
+      const resetState = resetAlgorithmState(executionState.algorithmState);
+      setExecutionState(prev => ({
+        ...prev,
+        currentLine: 0,
+        executedLines: [],
+        isPlaying: false,
+        arrayHistory: [[]],
+        algorithmState: resetState,
+      }));
+      setArrayData(resetState.steps[0]?.array || []);
+    } else {
+      setExecutionState(prev => ({
+        ...prev,
+        currentLine: 0,
+        executedLines: [],
+        isPlaying: false,
+        arrayHistory: [[]],
+        algorithmState: undefined,
+      }));
+      setArrayData([]);
+      setCurrentArrayName("");
+      setCurrentArrayType(null);
+    }
+    
+    setAlgorithmCode("");
   };
 
   const handlePlay = () => {
@@ -464,28 +518,135 @@ const App: React.FC = () => {
         clearInterval(playIntervalRef.current);
         playIntervalRef.current = null;
       }
+      if (algorithmIntervalRef.current) {
+        clearInterval(algorithmIntervalRef.current);
+        algorithmIntervalRef.current = null;
+      }
       setExecutionState(prev => ({ ...prev, isPlaying: false }));
     } else {
       // Play
       setExecutionState(prev => ({ ...prev, isPlaying: true }));
-      playIntervalRef.current = window.setInterval(() => {
-        setExecutionState(prev => {
-          const lines = getExecutableLines();
-          if (prev.currentLine >= lines.length) {
-            if (playIntervalRef.current) {
-              clearInterval(playIntervalRef.current);
-              playIntervalRef.current = null;
+      
+      if (executionState.mode === "algorithm" && executionState.algorithmState) {
+        // Algorithm mode play
+        const speed = executionState.algorithmState.speed || 1;
+        const interval = 1000 / speed;
+        
+        algorithmIntervalRef.current = window.setInterval(() => {
+          setExecutionState(prev => {
+            if (!prev.algorithmState || prev.algorithmState.currentStep >= prev.algorithmState.totalSteps - 1) {
+              if (algorithmIntervalRef.current) {
+                clearInterval(algorithmIntervalRef.current);
+                algorithmIntervalRef.current = null;
+              }
+              return { ...prev, isPlaying: false };
             }
-            return { ...prev, isPlaying: false };
-          }
-          return prev;
-        });
-      }, 1000);
+            
+            const nextState = getNextAlgorithmStep(prev.algorithmState);
+            setArrayData(nextState.steps[nextState.currentStep]?.array || []);
+            
+            return {
+              ...prev,
+              algorithmState: nextState,
+            };
+          });
+        }, interval);
+      } else {
+        // Step mode play
+        playIntervalRef.current = window.setInterval(() => {
+          setExecutionState(prev => {
+            const lines = getExecutableLines();
+            if (prev.currentLine >= lines.length) {
+              if (playIntervalRef.current) {
+                clearInterval(playIntervalRef.current);
+                playIntervalRef.current = null;
+              }
+              return { ...prev, isPlaying: false };
+            }
+            return prev;
+          });
+        }, 1000);
+      }
     }
   };
 
+  // Algorithm-specific functions
+  const handleAlgorithmSelect = (type: AlgorithmType, target?: number | string) => {
+    if (!type) return;
+    
+    try {
+      const algorithmState = initializeAlgorithmState(type, arrayData, target);
+      setExecutionState(prev => ({
+        ...prev,
+        mode: "algorithm",
+        algorithmState,
+      }));
+      
+      // Set the algorithm code for display
+      setAlgorithmCode(algorithmCodeSnippets[type]);
+      
+      // Update array data to first step
+      setArrayData(algorithmState.steps[0]?.array || []);
+      
+      toast.success(`${type === "linearSearch" ? "Linear Search" : type === "binarySearch" ? "Binary Search" : "Bubble Sort"} algorithm initialized!`);
+    } catch (error) {
+      toast.error(`Error initializing algorithm: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
+  const handleAlgorithmStepForward = () => {
+    if (!executionState.algorithmState) return;
+    
+    const nextState = getNextAlgorithmStep(executionState.algorithmState);
+    setExecutionState(prev => ({
+      ...prev,
+      algorithmState: nextState,
+    }));
+    setArrayData(nextState.steps[nextState.currentStep]?.array || []);
+  };
+
+  const handleAlgorithmStepBack = () => {
+    if (!executionState.algorithmState) return;
+    
+    const prevState = getPreviousAlgorithmStep(executionState.algorithmState);
+    setExecutionState(prev => ({
+      ...prev,
+      algorithmState: prevState,
+    }));
+    setArrayData(prevState.steps[prevState.currentStep]?.array || []);
+  };
+
+  const handleAlgorithmSpeedChange = (speed: number) => {
+    if (!executionState.algorithmState) return;
+    
+    setExecutionState(prev => ({
+      ...prev,
+      algorithmState: {
+        ...prev.algorithmState!,
+        speed,
+      },
+    }));
+    
+    // If currently playing, restart interval with new speed
+    if (executionState.isPlaying && algorithmIntervalRef.current) {
+      clearInterval(algorithmIntervalRef.current);
+      algorithmIntervalRef.current = null;
+      
+      setExecutionState(prev => ({ ...prev, isPlaying: false }));
+      setTimeout(() => handlePlay(), 100);
+    }
+  };
+
+  const handleAlgorithmPause = () => {
+    if (algorithmIntervalRef.current) {
+      clearInterval(algorithmIntervalRef.current);
+      algorithmIntervalRef.current = null;
+    }
+    setExecutionState(prev => ({ ...prev, isPlaying: false }));
+  };
+
   return (
-    <div className="h-[100vh] flex flex-col relative overflow-hidden">
+    <div className="flex flex-col relative overflow-hidden">
       {/* Animated gradient background */}
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 animate-gradient-xy"></div>
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]"></div>
@@ -521,32 +682,69 @@ const App: React.FC = () => {
           canStepBack={executionState.currentLine > 0}
         />
       </div>
+
+      {/* Algorithm Controls (only in algorithm mode) */}
+      {executionState.mode === "algorithm" && (
+        <div className="relative z-10 px-4 py-3">
+          <AlgorithmControls
+            algorithmState={executionState.algorithmState || undefined}
+            onAlgorithmSelect={handleAlgorithmSelect}
+            onStepForward={handleAlgorithmStepForward}
+            onStepBack={handleAlgorithmStepBack}
+            onReset={handleReset}
+            onPlay={handlePlay}
+            onPause={handleAlgorithmPause}
+            onSpeedChange={handleAlgorithmSpeedChange}
+            isPlaying={executionState.isPlaying}
+            canStepForward={executionState.algorithmState ? executionState.algorithmState.currentStep < executionState.algorithmState.totalSteps - 1 : false}
+            canStepBack={executionState.algorithmState ? executionState.algorithmState.currentStep > 0 : false}
+            currentArray={arrayData}
+          />
+        </div>
+      )}
       
       <PanelGroup direction="horizontal" className="flex-1 relative z-0">
         <Panel defaultSize={50} minSize={30}>
           <div className="h-full bg-black/20 backdrop-blur-sm border-r border-white/10 shadow-2xl">
-            <MonacoEditor
-              width="100%"
-              height="100%"
-              language="cpp"
-              theme="vs-dark"
-              value={code}
-              onChange={(newValue) => setCode(newValue)}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 14,
-                padding: { top: 20 },
-                scrollBeyondLastLine: false,
-                scrollbar: {
-                  vertical: "hidden",
-                  verticalScrollbarSize: 0,
-                },
-                overviewRulerLanes: 0,
-                lineNumbersMinChars: 3,
-                glyphMargin: true,
-                lineDecorationsWidth: 5,
-              }}
-            />
+            {executionState.mode === "algorithm" && algorithmCode ? (
+              <div className="h-full flex flex-col">
+                <div className="p-4 border-b border-white/10">
+                  <h3 className="text-white font-semibold text-lg">
+                    {executionState.algorithmState?.type === "linearSearch" && "Linear Search Algorithm"}
+                    {executionState.algorithmState?.type === "binarySearch" && "Binary Search Algorithm"}
+                    {executionState.algorithmState?.type === "bubbleSort" && "Bubble Sort Algorithm"}
+                  </h3>
+                </div>
+                <div className="flex-1 overflow-auto">
+                  <pre className="p-4 text-sm text-gray-200 font-mono whitespace-pre-wrap">
+                    {algorithmCode}
+                  </pre>
+                </div>
+              </div>
+            ) : (
+              <MonacoEditor
+                width="100%"
+                height="100%"
+                language="cpp"
+                theme="vs-dark"
+                value={code}
+                onChange={(newValue) => setCode(newValue)}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 14,
+                  padding: { top: 20 },
+                  scrollBeyondLastLine: false,
+                  scrollbar: {
+                    vertical: "hidden",
+                    verticalScrollbarSize: 0,
+                  },
+                  overviewRulerLanes: 0,
+                  lineNumbersMinChars: 3,
+                  glyphMargin: true,
+                  lineDecorationsWidth: 5,
+                }}
+              />
+            )}
           </div>
         </Panel>
         <PanelResizeHandle className="w-2 bg-gradient-to-b from-cyan-500/30 via-purple-500/30 to-pink-500/30 hover:from-cyan-400/60 hover:via-purple-400/60 hover:to-pink-400/60 transition-all duration-300 cursor-ew-resize shadow-lg hover:shadow-cyan-500/50 relative group">
@@ -561,7 +759,12 @@ const App: React.FC = () => {
         >
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-purple-500/5 to-pink-500/5"></div>
           <div className="relative z-10 w-full h-full">
-            <ArrayVisualizer data={arrayData} onDataChange={handleDataChange} />
+            <ArrayVisualizer 
+              data={arrayData} 
+              onDataChange={handleDataChange}
+              highlightedIndices={executionState.algorithmState?.highlightedIndices || []}
+              algorithmState={executionState.algorithmState || undefined}
+            />
           </div>
         </Panel>
       </PanelGroup>

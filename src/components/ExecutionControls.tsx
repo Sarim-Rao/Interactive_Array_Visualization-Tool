@@ -1,9 +1,9 @@
 import React from "react";
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, Zap } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Zap, Search } from "lucide-react";
 
 interface ExecutionControlsProps {
-  mode: "live" | "step";
-  onModeChange: (mode: "live" | "step") => void;
+  mode: "live" | "step" | "algorithm";
+  onModeChange: (mode: "live" | "step" | "algorithm") => void;
   currentLine: number;
   totalLines: number;
   onStepForward: () => void;
@@ -54,6 +54,17 @@ const ExecutionControls: React.FC<ExecutionControlsProps> = ({
           >
             <SkipForward size={16} className="inline mr-2" />
             Step Mode
+          </button>
+          <button
+            onClick={() => onModeChange("algorithm")}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              mode === "algorithm"
+                ? "bg-gradient-to-r from-pink-500 to-cyan-500 text-white shadow-lg"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            <Search size={16} className="inline mr-2" />
+            Algorithm Mode
           </button>
         </div>
       </div>

@@ -56,6 +56,9 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose }) => {
                 int, char, and double arrays
               </li>
               <li>
+                <strong className="text-white">Array Operations:</strong> Insert, update, and delete array elements
+              </li>
+              <li>
                 <strong className="text-white">Real-time Visualization:</strong> See your
                 arrays update instantly as you type
               </li>
@@ -124,7 +127,11 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose }) => {
                 <code className="text-sm text-cyan-200 block font-mono">
                   int numbers[5] = {`{10, 20, 30, 40, 50}`};
                   <br />
-                  numbers[2] = 85;
+                  numbers[2] = 85; // Update element
+                  <br />
+                  numbers.insert(1, 25); // Insert element
+                  <br />
+                  numbers.remove(3); // Delete element
                 </code>
               </div>
 
@@ -135,7 +142,11 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose }) => {
                 <code className="text-sm text-purple-200 block font-mono">
                   char word[4] = "byte";
                   <br />
-                  word[0] = 'j';
+                  word[0] = 'j'; // Update element
+                  <br />
+                  word.insert(2, 't'); // Insert element
+                  <br />
+                  word.delete(1); // Delete element
                 </code>
               </div>
 
@@ -146,7 +157,11 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose }) => {
                 <code className="text-sm text-pink-200 block font-mono">
                   double values[3] = {`{1.5, 2.7, 3.14}`};
                   <br />
-                  values[1] = 4.2;
+                  values[1] = 4.2; // Update element
+                  <br />
+                  values.insert(0, 0.5); // Insert element
+                  <br />
+                  values.remove(2); // Delete element
                 </code>
               </div>
             </div>

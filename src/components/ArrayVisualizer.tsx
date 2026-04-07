@@ -25,7 +25,7 @@ ChartJS.register(
   dragData
 );
 
-const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange }) => {
+const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange, highlightedIndices = [], algorithmState }) => {
   const chartRef = useRef<ChartJS<"bar", number[], string> | null>(null);
 
   let labels: string[];
@@ -66,13 +66,38 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange }) => {
         label: isCharArray ? "ASCII Values" : "Array Values",
         data: chartDataValues,
         backgroundColor: (context) => {
+          const index = context.dataIndex;
           const chart = context.chart;
           const { ctx, chartArea } = chart;
+          
+          // Highlight algorithm indices
+          if (highlightedIndices.includes(index)) {
+            if (algorithmState?.foundIndex === index) {
+              return "rgba(34, 197, 94, 0.8)"; // Green for found element
+            } else if (algorithmState?.type === "bubbleSort" && algorithmState?.isSorted) {
+              return "rgba(34, 197, 94, 0.8)"; // Green for sorted array
+            } else {
+              return "rgba(251, 191, 36, 0.8)"; // Yellow for current comparison
+            }
+          }
+          
           if (!chartArea) return "rgba(6, 182, 212, 0.8)";
           return createGradient(ctx);
         },
         borderColor: (context) => {
           const index = context.dataIndex;
+          
+          // Highlight algorithm indices
+          if (highlightedIndices.includes(index)) {
+            if (algorithmState?.foundIndex === index) {
+              return "rgba(34, 197, 94, 1)"; // Green for found element
+            } else if (algorithmState?.type === "bubbleSort" && algorithmState?.isSorted) {
+              return "rgba(34, 197, 94, 1)"; // Green for sorted array
+            } else {
+              return "rgba(251, 191, 36, 1)"; // Yellow for current comparison
+            }
+          }
+          
           const colors = [
             "rgba(6, 182, 212, 1)", 
             "rgba(168, 85, 247, 1)", 
