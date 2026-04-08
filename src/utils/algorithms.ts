@@ -45,11 +45,6 @@ void bubbleSort(int arr[], int n) {
 // Import types from the main types file
 import type { AlgorithmStep, AlgorithmState, AlgorithmType } from "../types";
 
-// Define local types that extend the imported ones
-interface LocalAlgorithmStep extends AlgorithmStep {
-  array: any[];
-}
-
 // Simple algorithm implementations
 export function linearSearch(array: any[], target: any): LocalAlgorithmStep[] {
   const steps: LocalAlgorithmStep[] = [];
@@ -69,35 +64,78 @@ export function linearSearch(array: any[], target: any): LocalAlgorithmStep[] {
   return steps;
 }
 
+export interface LocalAlgorithmStep {
+  array: any[];
+  highlightedIndices: number[];
+  mid?: number;
+  left?: number;
+  right?: number;
+  foundIndex?: number;
+  description: string;
+  comparisons: number;
+  swaps: number;
+  iterations: number;
+}
+
 export function binarySearch(array: any[], target: any): LocalAlgorithmStep[] {
   const steps: LocalAlgorithmStep[] = [];
   let left = 0;
   let right = array.length - 1;
   let comparisons = 0;
-  
+
   while (left <= right) {
     const mid = Math.floor((left + right) / 2);
     comparisons++;
-    
+
+    // Step before comparison
     steps.push({
       array: [...array],
-      highlightedIndices: [mid, left, right],
-      description: `Checking mid=${mid} (${array[mid]}) in range [${left}, ${right}]`,
+      highlightedIndices: [mid], // highlight mid for visualization
+      mid,
+      left,
+      right,
+      description: `Checking index ${mid} (value ${array[mid]}) in range [${left}, ${right}]`,
       comparisons,
       swaps: 0,
       iterations: comparisons
     });
-    
+
     if (array[mid] === target) {
+      // Step when target found
+      steps.push({
+        array: [...array],
+        highlightedIndices: [mid],
+        mid,
+        left,
+        right,
+        foundIndex: mid,
+        description: `✅ Found target ${target} at index ${mid}`,
+        comparisons,
+        swaps: 0,
+        iterations: comparisons
+      });
+
+      // Return only steps for UI
       return steps;
     }
-    
+
     if (array[mid] < target) {
       left = mid + 1;
     } else {
       right = mid - 1;
     }
   }
+
+  // Target not found: still return steps for UI
+  steps.push({
+    array: [...array],
+    highlightedIndices: [],
+    description: `❌ Target ${target} not found in the array`,
+    comparisons,
+    swaps: 0,
+    iterations: comparisons
+  });
+
   return steps;
 }
 

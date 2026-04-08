@@ -30,17 +30,7 @@ import { Analytics } from "@vercel/analytics/react";
 
 // --- Main Component ---
 
-const initialCode = `// Array declaration and operations example
-int numbers[5] = {10, 20, 30, 40, 50};
-
-// Update element at index 2
-numbers[2] = 35;
-
-// Insert new element at index 1
-numbers.insert(1, 25);
-
-// Delete element at index 3
-numbers.remove(3);
+const initialCode = `
 `;
 
 const App: React.FC = () => {
@@ -212,17 +202,19 @@ const App: React.FC = () => {
     }
   }, 500);
 
-  // Immediate effect for updating array data without validation toasts
-  useEffect(() => {
-    const lines = code
+  const isUpdatingDeclaration = useRef(false);
+
+  // Pure helper: compute final array state from code lines
+  const computeArrayState = (codeStr: string) => {
+    const lines = codeStr
       .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !line.startsWith("//"));
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("//"));
 
     const arrays: Record<string, ArrayData> = {};
     const arrayTypes: Record<string, "int" | "double" | "char"> = {};
 
-    lines.forEach((line) => {
+    for (const line of lines) {
       const intDecl = parseIntDeclaration(line);
       const doubleDecl = parseDoubleDeclaration(line);
       const charDecl = parseCharDeclaration(line);
@@ -230,66 +222,52 @@ const App: React.FC = () => {
       const insert = parseInsert(line);
       const deleteOp = parseDelete(line);
 
-      // Process declarations without validation toasts
       if (intDecl) {
         arrayTypes[intDecl.name] = "int";
-        if (intDecl.size > 0) {
-          if (intDecl.values.length >= intDecl.size) {
-            arrays[intDecl.name] = intDecl.values.slice(0, intDecl.size);
-          } else {
-            arrays[intDecl.name] = intDecl.values;
-          }
-        } else {
-          arrays[intDecl.name] = intDecl.values;
-        }
+        arrays[intDecl.name] = intDecl.size > 0
+          ? intDecl.values.slice(0, intDecl.size)
+          : intDecl.values;
       } else if (doubleDecl) {
         arrayTypes[doubleDecl.name] = "double";
-        if (doubleDecl.size > 0) {
-          if (doubleDecl.values.length >= doubleDecl.size) {
-            arrays[doubleDecl.name] = doubleDecl.values.slice(0, doubleDecl.size);
-          } else {
-            arrays[doubleDecl.name] = doubleDecl.values;
-          }
-        } else {
-          arrays[doubleDecl.name] = doubleDecl.values;
-        }
+        arrays[doubleDecl.name] = doubleDecl.size > 0
+          ? doubleDecl.values.slice(0, doubleDecl.size)
+          : doubleDecl.values;
       } else if (charDecl) {
         arrayTypes[charDecl.name] = "char";
-        if (charDecl.size > 0) {
-          if (charDecl.values.length >= charDecl.size) {
-            arrays[charDecl.name] = charDecl.values.slice(0, charDecl.size);
-          } else {
-            arrays[charDecl.name] = charDecl.values;
-          }
-        } else {
-          arrays[charDecl.name] = charDecl.values;
-        }
+        arrays[charDecl.name] = charDecl.size > 0
+          ? charDecl.values.slice(0, charDecl.size)
+          : charDecl.values;
       } else if (update && arrays[update.name]) {
-        const newArr = [...arrays[update.name]];
-        if (update.index >= 0 && update.index < newArr.length) {
-          newArr[update.index] = update.value;
-          arrays[update.name] = newArr;
+        const arr = [...arrays[update.name]];
+        if (update.index >= 0 && update.index < arr.length) {
+          arr[update.index] = update.value;
+          arrays[update.name] = arr;
         }
       } else if (insert && arrays[insert.name]) {
-        const newArr = [...arrays[insert.name]];
-        if (insert.index >= 0 && insert.index <= newArr.length) {
-          newArr.splice(insert.index, 0, insert.value);
-          arrays[insert.name] = newArr;
+        const arr = [...arrays[insert.name]];
+        if (insert.index >= 0 && insert.index <= arr.length) {
+          arr.splice(insert.index, 0, insert.value);
+          arrays[insert.name] = arr;
         }
       } else if (deleteOp && arrays[deleteOp.name]) {
-        const newArr = [...arrays[deleteOp.name]];
-        if (deleteOp.index >= 0 && deleteOp.index < newArr.length) {
-          newArr.splice(deleteOp.index, 1);
-          arrays[deleteOp.name] = newArr;
+        const arr = [...arrays[deleteOp.name]];
+        if (deleteOp.index >= 0 && deleteOp.index < arr.length) {
+          arr.splice(deleteOp.index, 1);
+          arrays[deleteOp.name] = arr;
         }
       }
-    });
+    }
+    return { arrays, arrayTypes };
+  };
+
+  // Immediate effect for updating array data without validation toasts
+  useEffect(() => {
+    const { arrays, arrayTypes } = computeArrayState(code);
 
     const firstArrayName = Object.keys(arrays)[0] || "";
     const firstArray = Object.values(arrays)[0] || [];
+
     setArrayData(firstArray);
-    
-    // Track the current array name and type
     if (firstArrayName) {
       setCurrentArrayName(firstArrayName);
       setCurrentArrayType(arrayTypes[firstArrayName] || null);
@@ -298,7 +276,70 @@ const App: React.FC = () => {
       setCurrentArrayType(null);
     }
 
-    debouncedValidation(code);
+    // Check if there are insert/delete/update ops that need to be folded into the declaration
+    const rawLines = code.split("\n");
+    const hasOperations = rawLines.some(line => {
+      const t = line.trim();
+      const insert = parseInsert(t);
+      const deleteOp = parseDelete(t);
+      const update = parseUpdate(t);
+      return (insert && insert.name === firstArrayName) ||
+             (deleteOp && deleteOp.name === firstArrayName) ||
+             (update && update.name === firstArrayName);
+    });
+
+    if (firstArrayName && hasOperations && !isUpdatingDeclaration.current) {
+      const arrayType = arrayTypes[firstArrayName];
+      if (arrayType) {
+        // Build what the declaration line should look like
+        let formattedValues: string;
+        if (arrayType === "char") {
+          formattedValues = firstArray.map(v => `'${v}'`).join(", ");
+        } else if (arrayType === "double") {
+          formattedValues = firstArray.map(v => typeof v === "number" ? v.toString() : parseFloat(v.toString()).toString()).join(", ");
+        } else {
+          formattedValues = firstArray.map(v => typeof v === "number" ? Math.round(v).toString() : Math.round(parseFloat(v.toString())).toString()).join(", ");
+        }
+        const expectedDecl = `${arrayType} ${firstArrayName}[${firstArray.length}] = {${formattedValues}};`;
+
+        // Find the current declaration line
+        let currentDecl = "";
+        for (const line of rawLines) {
+          const t = line.trim();
+          const intDecl = parseIntDeclaration(t);
+          const doubleDecl = parseDoubleDeclaration(t);
+          const charDecl = parseCharDeclaration(t);
+          if ((intDecl && intDecl.name === firstArrayName) ||
+              (doubleDecl && doubleDecl.name === firstArrayName) ||
+              (charDecl && charDecl.name === firstArrayName)) {
+            currentDecl = t;
+            break;
+          }
+        }
+
+        // Only update if the declaration actually needs to change
+        if (currentDecl !== expectedDecl) {
+          isUpdatingDeclaration.current = true;
+          const newLines = rawLines.map(line => {
+            const t = line.trim();
+            const intDecl = parseIntDeclaration(t);
+            const doubleDecl = parseDoubleDeclaration(t);
+            const charDecl = parseCharDeclaration(t);
+            if ((intDecl && intDecl.name === firstArrayName) ||
+                (doubleDecl && doubleDecl.name === firstArrayName) ||
+                (charDecl && charDecl.name === firstArrayName)) {
+              return expectedDecl;
+            }
+            return line;
+          });
+          setCode(newLines.join("\n"));
+        } else {
+          isUpdatingDeclaration.current = false;
+        }
+      }
+    } else {
+      isUpdatingDeclaration.current = false;
+    }    debouncedValidation(code);
   }, [code, debouncedValidation]);
 
   // Handle bar drag updates - update code in real-time
