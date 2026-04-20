@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useMemo } from "react";
 import { Bar } from "react-chartjs-2";
 import dragData from "chartjs-plugin-dragdata";
 
@@ -28,27 +28,34 @@ ChartJS.register(
 const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange, highlightedIndices = [], algorithmState }) => {
   const chartRef = useRef<ChartJS<"bar", number[], string> | null>(null);
 
-  let labels: string[];
-  let chartDataValues: number[];
-  let yAxisMax: number | undefined;
-
   const isCharArray = data.length > 0 && typeof data[0] === "string";
 
-  if (isCharArray) {
-    labels = data.map(
-      (char) => `'${char}' (${(char as string).charCodeAt(0)})`
-    );
-    chartDataValues = (data as string[]).map((char) => char.charCodeAt(0));
-    yAxisMax = 130; // Accommodate the ASCII range
-  } else {
-    labels = (data as number[]).map((_, i) => `[${i}]`);
-    chartDataValues = data as number[];
-    // Dynamically set y-axis max for better scaling
-    yAxisMax =
-      Math.max(...chartDataValues) > 0
-        ? Math.max(...chartDataValues) * 1.2
-        : 100;
-  }
+  // Never alias `data` into Chart.js — dragData mutates the dataset in place, which breaks
+  // React updates when code-driven state (e.g. remove/insert) replaces the logical array.
+  const labels = useMemo(() => {
+    if (isCharArray) {
+      return (data as string[]).map(
+        (char) => `'${char}' (${(char as string).charCodeAt(0)})`
+      );
+    }
+    return (data as number[]).map((_, i) => `[${i}]`);
+  }, [data, isCharArray]);
+
+  const chartDataValues = useMemo(() => {
+    if (isCharArray) {
+      return (data as string[]).map((char) => char.charCodeAt(0));
+    }
+    return [...(data as number[])];
+  }, [data, isCharArray]);
+
+  const yAxisMax = useMemo(() => {
+    if (isCharArray) return 130;
+    if (chartDataValues.length === 0) return 100;
+    const m = Math.max(...chartDataValues);
+    return m > 0 ? m * 1.2 : 100;
+  }, [chartDataValues, isCharArray]);
+
+  const chartDataKey = useMemo(() => JSON.stringify(data), [data]);
 
   // Create gradient colors for bars
   const createGradient = (ctx: CanvasRenderingContext2D) => {
@@ -227,7 +234,7 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange, highli
     <div className="w-full max-w-5xl mx-auto h-full p-6 flex items-center justify-center relative">
       <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-purple-500/10 to-pink-500/10 rounded-3xl blur-3xl"></div>
       <div className="relative z-10 w-full h-full bg-black/20 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-6">
-        <Bar ref={chartRef} data={chartData} options={options} />
+        <Bar key={chartDataKey} ref={chartRef} data={chartData} options={options} />
       </div>
     </div>
   );

@@ -50,7 +50,6 @@ const App: React.FC = () => {
   const [algorithmCode, setAlgorithmCode] = useState<string>("");
   const playIntervalRef = useRef<number | null>(null);
   const algorithmIntervalRef = useRef<number | null>(null);
-
   const debouncedValidation = useDebouncedCallback((codeToValidate: string) => {
     const lines = codeToValidate
       .split("\n")
@@ -202,8 +201,6 @@ const App: React.FC = () => {
     }
   }, 500);
 
-  const isUpdatingDeclaration = useRef(false);
-
   // Pure helper: compute final array state from code lines
   const computeArrayState = (codeStr: string) => {
     const lines = codeStr
@@ -276,119 +273,58 @@ const App: React.FC = () => {
       setCurrentArrayType(null);
     }
 
-    // Check if there are insert/delete/update ops that need to be folded into the declaration
-    const rawLines = code.split("\n");
-    const hasOperations = rawLines.some(line => {
-      const t = line.trim();
-      const insert = parseInsert(t);
-      const deleteOp = parseDelete(t);
-      const update = parseUpdate(t);
-      return (insert && insert.name === firstArrayName) ||
-             (deleteOp && deleteOp.name === firstArrayName) ||
-             (update && update.name === firstArrayName);
-    });
-
-    if (firstArrayName && hasOperations && !isUpdatingDeclaration.current) {
-      const arrayType = arrayTypes[firstArrayName];
-      if (arrayType) {
-        // Build what the declaration line should look like
-        let formattedValues: string;
-        if (arrayType === "char") {
-          formattedValues = firstArray.map(v => `'${v}'`).join(", ");
-        } else if (arrayType === "double") {
-          formattedValues = firstArray.map(v => typeof v === "number" ? v.toString() : parseFloat(v.toString()).toString()).join(", ");
-        } else {
-          formattedValues = firstArray.map(v => typeof v === "number" ? Math.round(v).toString() : Math.round(parseFloat(v.toString())).toString()).join(", ");
-        }
-        const expectedDecl = `${arrayType} ${firstArrayName}[${firstArray.length}] = {${formattedValues}};`;
-
-        // Find the current declaration line
-        let currentDecl = "";
-        for (const line of rawLines) {
-          const t = line.trim();
-          const intDecl = parseIntDeclaration(t);
-          const doubleDecl = parseDoubleDeclaration(t);
-          const charDecl = parseCharDeclaration(t);
-          if ((intDecl && intDecl.name === firstArrayName) ||
-              (doubleDecl && doubleDecl.name === firstArrayName) ||
-              (charDecl && charDecl.name === firstArrayName)) {
-            currentDecl = t;
-            break;
-          }
-        }
-
-        // Only update if the declaration actually needs to change
-        if (currentDecl !== expectedDecl) {
-          isUpdatingDeclaration.current = true;
-          const newLines = rawLines.map(line => {
-            const t = line.trim();
-            const intDecl = parseIntDeclaration(t);
-            const doubleDecl = parseDoubleDeclaration(t);
-            const charDecl = parseCharDeclaration(t);
-            if ((intDecl && intDecl.name === firstArrayName) ||
-                (doubleDecl && doubleDecl.name === firstArrayName) ||
-                (charDecl && charDecl.name === firstArrayName)) {
-              return expectedDecl;
-            }
-            return line;
-          });
-          setCode(newLines.join("\n"));
-        } else {
-          isUpdatingDeclaration.current = false;
-        }
-      }
-    } else {
-      isUpdatingDeclaration.current = false;
-    }    debouncedValidation(code);
+    debouncedValidation(code);
   }, [code, debouncedValidation]);
 
-  // Handle bar drag updates - update code in real-time
+  // Handle bar drag updates - update the declaration directly with the new values
   const handleDataChange = (index: number, value: number | string) => {
     if (!currentArrayName || !currentArrayType) return;
 
-    const lines = code.split("\n");
-    let updateLineIndex = -1;
-    
-    // Find existing update statement for this index
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      const update = parseUpdate(line);
-      if (update && update.name === currentArrayName && update.index === index) {
-        updateLineIndex = i;
-        break;
-      }
-    }
+    // Compute current array state, apply the drag change, then rewrite the declaration
+    const { arrays } = computeArrayState(code);
+    const currentArr = arrays[currentArrayName];
+    if (!currentArr || index < 0 || index >= currentArr.length) return;
 
-    // Format the value based on type
-    let formattedValue: string;
+    const newArr = [...currentArr];
+    newArr[index] = value;
+
+    // Format values for the declaration
+    let formattedValues: string;
     if (currentArrayType === "char") {
-      formattedValue = `'${value}'`;
+      formattedValues = (newArr as string[]).map(v => `'${v}'`).join(", ");
     } else if (currentArrayType === "double") {
-      formattedValue = typeof value === "number" ? value.toString() : parseFloat(value.toString()).toString();
+      formattedValues = (newArr as number[]).map(v => v.toString()).join(", ");
     } else {
-      formattedValue = typeof value === "number" ? Math.round(value).toString() : Math.round(parseFloat(value.toString())).toString();
+      formattedValues = (newArr as number[]).map(v => Math.round(v).toString()).join(", ");
     }
 
-    const newUpdateStatement = `${currentArrayName}[${index}] = ${formattedValue};`;
+    const newDecl = `${currentArrayType} ${currentArrayName}[${newArr.length}] = {${formattedValues}};`;
 
-    if (updateLineIndex >= 0) {
-      // Update existing line
-      lines[updateLineIndex] = newUpdateStatement;
-    } else {
-      // Add new update statement at the end (before any trailing comments)
-      let insertIndex = lines.length;
-      // Find the last non-empty, non-comment line
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const trimmed = lines[i].trim();
-        if (trimmed && !trimmed.startsWith("//")) {
-          insertIndex = i + 1;
-          break;
-        }
+    // Replace the declaration line and remove any insert/delete/update op lines for this array
+    const newLines = code.split("\n").reduce<string[]>((acc, line) => {
+      const t = line.trim();
+      const intDecl = parseIntDeclaration(t);
+      const doubleDecl = parseDoubleDeclaration(t);
+      const charDecl = parseCharDeclaration(t);
+      const upd = parseUpdate(t);
+      const ins = parseInsert(t);
+      const del = parseDelete(t);
+
+      if ((intDecl && intDecl.name === currentArrayName) ||
+          (doubleDecl && doubleDecl.name === currentArrayName) ||
+          (charDecl && charDecl.name === currentArrayName)) {
+        acc.push(newDecl);
+      } else if ((upd && upd.name === currentArrayName) ||
+                 (ins && ins.name === currentArrayName) ||
+                 (del && del.name === currentArrayName)) {
+        // drop op lines — they're now baked into the declaration
+      } else {
+        acc.push(line);
       }
-      lines.splice(insertIndex, 0, newUpdateStatement);
-    }
+      return acc;
+    }, []);
 
-    setCode(lines.join("\n"));
+    setCode(newLines.join("\n"));
   };
 
   // Execution control functions

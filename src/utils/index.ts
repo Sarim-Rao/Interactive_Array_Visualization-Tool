@@ -1,4 +1,3 @@
-// --- Parsing Functions ---
 
 export const parseIntDeclaration = (
   line: string
@@ -48,16 +47,14 @@ export const parseCharDeclaration = (
 export const parseUpdate = (
   line: string
 ): { name: string; index: number; value: number | string } | null => {
-  let match = line.match(/(\w+)\[(-?\d+)]\s*=\s*(\d+);/);
+  // Check char first
+  let match = line.match(/(\w+)\[(-?\d+)]\s*=\s*'(.)';/);
   if (match) {
-    return {
-      name: match[1],
-      index: parseInt(match[2], 10),
-      value: parseInt(match[3], 10),
-    };
+    return { name: match[1], index: parseInt(match[2], 10), value: match[3] };
   }
 
-  match = line.match(/(\w+)\[(-?\d+)]\s*=\s*([\d.]+);/);
+  // Check double before int (to avoid 3.5 being parsed as int 3)
+  match = line.match(/(\w+)\[(-?\d+)]\s*=\s*(\d+\.\d+);/);
   if (match) {
     return {
       name: match[1],
@@ -66,9 +63,14 @@ export const parseUpdate = (
     };
   }
 
-  match = line.match(/(\w+)\[(-?\d+)]\s*=\s*'(.)';/);
+  // Check int
+  match = line.match(/(\w+)\[(-?\d+)]\s*=\s*(\d+);/);
   if (match) {
-    return { name: match[1], index: parseInt(match[2], 10), value: match[3] };
+    return {
+      name: match[1],
+      index: parseInt(match[2], 10),
+      value: parseInt(match[3], 10),
+    };
   }
 
   return null;
@@ -131,9 +133,9 @@ export const parseDelete = (
 export const detectMissingSemicolon = (line: string): boolean => {
   // Check if line matches update pattern but without semicolon at the end
   const updatePatterns = [
-    /^\s*\w+\[\d+\]\s*=\s*\d+\s*$/, // int update without semicolon
-    /^\s*\w+\[\d+\]\s*=\s*[\d.]+\s*$/, // double update without semicolon
-    /^\s*\w+\[\d+\]\s*=\s*'.'\s*$/, // char update without semicolon
+    /^\s*\w+\[\d+\]\s*=\s*\d+\s*$/, 
+    /^\s*\w+\[\d+\]\s*=\s*[\d.]+\s*$/, 
+    /^\s*\w+\[\d+\]\s*=\s*'.'\s*$/, 
   ];
 
   return updatePatterns.some((pattern) => pattern.test(line));

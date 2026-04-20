@@ -1,4 +1,3 @@
-// Simple algorithms implementation
 export const algorithmCodeSnippets = {
   linearSearch: `// Linear Search Algorithm
 int linearSearch(int arr[], int n, int target) {
@@ -126,7 +125,6 @@ export function binarySearch(array: any[], target: any): LocalAlgorithmStep[] {
     }
   }
 
-  // Target not found: still return steps for UI
   steps.push({
     array: [...array],
     highlightedIndices: [],
