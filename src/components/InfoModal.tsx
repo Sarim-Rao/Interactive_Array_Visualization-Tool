@@ -140,7 +140,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose }) => {
                   Character Array:
                 </p>
                 <code className="text-sm text-purple-200 block font-mono">
-                  char word[4] = "byte";
+                  char word[4] = {`{'b', 'y', 't', 'e'}`};
                   <br />
                   word[0] = 'j'; // Update element
                   <br />

@@ -78,9 +78,26 @@ export interface LocalAlgorithmStep {
 
 export function binarySearch(array: any[], target: any): LocalAlgorithmStep[] {
   const steps: LocalAlgorithmStep[] = [];
+  const sortedArray = [...array].sort((a, b) => {
+    if (a === b) return 0;
+    return a > b ? 1 : -1;
+  });
+  const isAlreadySorted = array.every((value, index) => value === sortedArray[index]);
+  const searchArray = isAlreadySorted ? [...array] : sortedArray;
   let left = 0;
-  let right = array.length - 1;
+  let right = searchArray.length - 1;
   let comparisons = 0;
+
+  if (!isAlreadySorted) {
+    steps.push({
+      array: [...searchArray],
+      highlightedIndices: Array.from({ length: searchArray.length }, (_, i) => i),
+      description: "Binary search requires sorted data, so the visualization uses a sorted copy of the array",
+      comparisons,
+      swaps: 0,
+      iterations: 0
+    });
+  }
 
   while (left <= right) {
     const mid = Math.floor((left + right) / 2);
@@ -88,21 +105,21 @@ export function binarySearch(array: any[], target: any): LocalAlgorithmStep[] {
 
     // Step before comparison
     steps.push({
-      array: [...array],
+      array: [...searchArray],
       highlightedIndices: [mid], // highlight mid for visualization
       mid,
       left,
       right,
-      description: `Checking index ${mid} (value ${array[mid]}) in range [${left}, ${right}]`,
+      description: `Checking index ${mid} (value ${searchArray[mid]}) in range [${left}, ${right}]`,
       comparisons,
       swaps: 0,
       iterations: comparisons
     });
 
-    if (array[mid] === target) {
+    if (searchArray[mid] === target) {
       // Step when target found
       steps.push({
-        array: [...array],
+        array: [...searchArray],
         highlightedIndices: [mid],
         mid,
         left,
@@ -118,7 +135,7 @@ export function binarySearch(array: any[], target: any): LocalAlgorithmStep[] {
       return steps;
     }
 
-    if (array[mid] < target) {
+    if (searchArray[mid] < target) {
       left = mid + 1;
     } else {
       right = mid - 1;
@@ -126,7 +143,7 @@ export function binarySearch(array: any[], target: any): LocalAlgorithmStep[] {
   }
 
   steps.push({
-    array: [...array],
+    array: [...searchArray],
     highlightedIndices: [],
     description: `❌ Target ${target} not found in the array`,
     comparisons,
@@ -217,7 +234,8 @@ export function getNextAlgorithmStep(state: AlgorithmState): AlgorithmState {
     highlightedIndices: step.highlightedIndices,
     comparisons: step.comparisons,
     swaps: step.swaps,
-    iterations: step.iterations
+    iterations: step.iterations,
+    foundIndex: step.foundIndex
   };
 }
 
@@ -233,7 +251,8 @@ export function getPreviousAlgorithmStep(state: AlgorithmState): AlgorithmState 
     highlightedIndices: step.highlightedIndices,
     comparisons: step.comparisons,
     swaps: step.swaps,
-    iterations: step.iterations
+    iterations: step.iterations,
+    foundIndex: step.foundIndex
   };
 }
 
@@ -246,6 +265,7 @@ export function resetAlgorithmState(state: AlgorithmState): AlgorithmState {
     highlightedIndices: firstStep?.highlightedIndices || [],
     comparisons: firstStep?.comparisons || 0,
     swaps: firstStep?.swaps || 0,
-    iterations: firstStep?.iterations || 0
+    iterations: firstStep?.iterations || 0,
+    foundIndex: firstStep?.foundIndex
   };
 }

@@ -35,7 +35,7 @@ const ArrayVisualizer: React.FC<VisualizerProps> = ({ data, onDataChange, highli
   const labels = useMemo(() => {
     if (isCharArray) {
       return (data as string[]).map(
-        (char) => `'${char}' (${(char as string).charCodeAt(0)})`
+        (char, i) => `[${i}] '${char}' (${(char as string).charCodeAt(0)})`
       );
     }
     return (data as number[]).map((_, i) => `[${i}]`);

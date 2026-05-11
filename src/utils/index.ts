@@ -34,11 +34,17 @@ export const parseDoubleDeclaration = (
 export const parseCharDeclaration = (
   line: string
 ): { name: string; size: number; values: string[] } | null => {
-  const match = line.match(/char\s+(\w+)\[(\-?\d*)]\s*=\s*"([^"]*)";/);
+  const match = line.match(/char\s+(\w+)\[(\-?\d*)]\s*=\s*\{([^}]+)\};/);
   if (match) {
     const name = match[1];
     const size = match[2] ? parseInt(match[2], 10) : 0;
-    const values = match[3].split("");
+    const tokens = match[3].split(",").map((s) => s.trim());
+    const values: string[] = [];
+    for (const token of tokens) {
+      const charMatch = token.match(/^'(.)'$/);
+      if (!charMatch) return null;
+      values.push(charMatch[1]);
+    }
     return { name, size, values };
   }
   return null;
